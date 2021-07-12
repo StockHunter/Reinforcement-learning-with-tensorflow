@@ -12,7 +12,15 @@ gym: 0.7.3
 
 import numpy as np
 import pandas as pd
-import tensorflow as tf
+
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
+
+tf.disable_v2_behavior()
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -94,7 +102,7 @@ class DeepQNetwork:
             self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
         # ------------------ build target_net ------------------
-        self.s_ = tf.placeholder(tf.float32, [None, self.n_features], name='s_')    # input
+        self.s_ = tf.placeholder(tf.float32, [None, self.n_features], name='s_')  # input
         with tf.variable_scope('target_net'):
             # c_names(collections_names) are the collections to store variables
             c_names = ['target_net_params', tf.GraphKeys.GLOBAL_VARIABLES]
@@ -116,21 +124,32 @@ class DeepQNetwork:
             self.memory_counter = 0
 
         transition = np.hstack((s, [a, r], s_))
-
+        # print("store_transition s:", s)
+        # print("store_transition a:", a)
+        # print("store_transition r:", r)
+        # print("store_transition s_:", s_)
         # replace the old memory with new memory
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
 
         self.memory_counter += 1
 
+    # observation 为归一化之后的滑块的当前位置值
     def choose_action(self, observation):
         # to have batch dimension when feed into tf placeholder
         observation = observation[np.newaxis, :]
+        # print("choose_action observation:", observation)
+        # print("choose_action self.s:", self.s)
 
         if np.random.uniform() < self.epsilon:
             # forward feed the observation and get q value for every actions
+            # 训练网络，输出当前位置，对应的各个action的q值
             actions_value = self.sess.run(self.q_eval, feed_dict={self.s: observation})
+            # print("choose_action self.q_eval:", self.q_eval)
+            # print("choose_action actions_value:", actions_value)
+            # 选择最大的q值
             action = np.argmax(actions_value)
+            # print("choose_action action:", action)
         else:
             action = np.random.randint(0, self.n_actions)
         return action
@@ -148,13 +167,19 @@ class DeepQNetwork:
             sample_index = np.random.choice(self.memory_counter, size=self.batch_size)
         batch_memory = self.memory[sample_index, :]
 
+        # 运行，self.q_next（target网络）, self.q_eval(训练网络) 这两个神经网络。
+        # input batch_memory的返回值
+        # output: q_next, q_eval 输出值；代表每个选择方向上的q值
         q_next, q_eval = self.sess.run(
             [self.q_next, self.q_eval],
             feed_dict={
                 self.s_: batch_memory[:, -self.n_features:],  # fixed params
                 self.s: batch_memory[:, :self.n_features],  # newest params
             })
-
+        # print("self.q_next:", self.q_next)
+        # print("self.q_eval:", self.q_eval)
+        # print("q_next:", q_next)
+        # print("q_eval:", q_eval)
         # change q_target w.r.t q_eval's action
         q_target = q_eval.copy()
 
@@ -162,8 +187,12 @@ class DeepQNetwork:
         eval_act_index = batch_memory[:, self.n_features].astype(int)
         reward = batch_memory[:, self.n_features + 1]
 
+        # 生成实际值：实际获取的reward+学习率* traget net输出的下一步的q值的最大值
         q_target[batch_index, eval_act_index] = reward + self.gamma * np.max(q_next, axis=1)
-
+        # print("learn batch_index:", batch_index)
+        # print("learn eval_act_index:", eval_act_index)
+        # print("learn reward:", reward)
+        # print("learn q_target:", q_target)
         """
         For example in this batch I have 2 samples and 3 actions:
         q_eval =
@@ -206,6 +235,3 @@ class DeepQNetwork:
         plt.ylabel('Cost')
         plt.xlabel('training steps')
         plt.show()
-
-
-

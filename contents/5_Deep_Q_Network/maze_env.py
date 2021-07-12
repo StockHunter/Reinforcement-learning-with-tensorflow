@@ -108,7 +108,8 @@ class Maze(tk.Tk, object):
                 base_action[0] -= UNIT
 
         self.canvas.move(self.rect, base_action[0], base_action[1])  # move agent
-
+        # print("step s:", s)
+        # print("step base_action:", base_action)
         next_coords = self.canvas.coords(self.rect)  # next state
 
         # reward function
@@ -121,7 +122,12 @@ class Maze(tk.Tk, object):
         else:
             reward = 0
             done = False
+        # Normalization 处理，将位置信息转换成0~1之间
         s_ = (np.array(next_coords[:2]) - np.array(self.canvas.coords(self.oval)[:2]))/(MAZE_H*UNIT)
+        # print("step action:", action)
+        # print("step next_coords:", next_coords)
+        # print("step self.oval:", self.canvas.coords(self.oval))
+        # print("step s_:", s_)
         return s_, reward, done
 
     def render(self):
